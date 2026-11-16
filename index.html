@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>숲나침반 3D — 전국 산림휴양 자원 탐색 | 산림공공데이터</title>
+<meta name="description" content="산림청 산림공공데이터(자연휴양림·100대명산·치유의숲·국가숲길·보호수)를 실제 지형 위 3D 지도로 탐색하는 공공데이터 활용 서비스. 전국 1만여 건의 산림휴양 자원을 한 화면에서 비교하고 주변 숲을 찾아보세요.">
+<meta name="theme-color" content="#06120e">
+<meta property="og:title" content="숲나침반 3D — 전국 산림휴양 자원 탐색">
+<meta property="og:description" content="산림청 산림공공데이터 5종, 전국 10,300여 건을 실제 지형 위 3D로. 휴양림·100대명산·치유의숲·국가숲길·보호수 탐색 서비스.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b1f18'/%3E%3Cpath d='M32 10 46 32H38l10 16H16l10-16h-8z' fill='%237ff0b8'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="scene" aria-label="대한민국 산림휴양 자원 3D 지도" role="img"></canvas>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="26" height="26"><path d="M16 3 26 20h-6l8 9H4l8-9H6z" fill="currentColor"/><rect x="14.6" y="27" width="2.8" height="4" fill="currentColor"/></svg>
+      </span>
+      <span class="brand-text">
+        <b>숲나침반 <i>3D</i></b>
+        <small>산림청 산림공공데이터로 만든 전국 산림휴양 탐색</small>
+      </span>
+    </div>
+    <div class="top-actions">
+      <button id="btnCase" class="chip chip-case" type="button">활용 사례 소개</button>
+      <button id="btnData" class="chip chip-data" type="button">
+        <span class="dot"></span><span class="chip-long">산림공공데이터 </span><b id="dataCountTop">5</b>종 · <b id="rowCountTop">10,300</b>건
+      </button>
+      <button id="btnHelp" class="chip" type="button" title="사용법">?</button>
+    </div>
+  </header>
+
+  <aside id="panel" class="panel">
+    <div class="panel-head">
+      <h2>숲 찾기</h2>
+      <button id="panelClose" class="icon-btn only-mobile" type="button" aria-label="닫기">✕</button>
+    </div>
+
+    <div class="search">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="2"/></svg>
+      <input id="search" type="search" placeholder="휴양림·산·숲길 검색 (예: 유명산)" autocomplete="off">
+    </div>
+
+    <div class="layer-block" id="layers">
+      <label class="layer" data-kind="hyuyang">
+        <input type="checkbox" checked><span class="sw sw-hyuyang"></span>
+        <span class="ly-name">자연휴양림<em>숙박·시설</em></span><span class="ly-count" id="cntHyuyang">0</span>
+      </label>
+      <label class="layer" data-kind="myeongsan">
+        <input type="checkbox" checked><span class="sw sw-myeongsan"></span>
+        <span class="ly-name">100대명산<em>산행 정보</em></span><span class="ly-count" id="cntMyeongsan">0</span>
+      </label>
+      <label class="layer" data-kind="trail">
+        <input type="checkbox" checked><span class="sw sw-trail"></span>
+        <span class="ly-name">국가숲길<em>실제 GPX 코스</em></span><span class="ly-count" id="cntTrail">0</span>
+      </label>
+      <label class="layer" data-kind="healing">
+        <input type="checkbox" checked><span class="sw sw-healing"></span>
+        <span class="ly-name">치유의숲<em>산림치유</em></span><span class="ly-count" id="cntHealing">0</span>
+      </label>
+      <label class="layer" data-kind="tree">
+        <input type="checkbox"><span class="sw sw-tree"></span>
+        <span class="ly-name">보호수<em>노거수·기념목</em></span><span class="ly-count" id="cntTree">0</span>
+      </label>
+    </div>
+
+    <div class="filter-row">
+      <select id="sido" aria-label="시도 선택"><option value="">전국</option></select>
+      <select id="extra" aria-label="추가 조건">
+        <option value="">조건 없음</option>
+      </select>
+    </div>
+
+    <div class="stat-line"><span id="statText">불러오는 중…</span></div>
+
+    <ul id="resultList" class="results" aria-label="검색 결과"></ul>
+  </aside>
+
+  <div class="panel-toggle only-mobile">
+    <button id="panelOpen" type="button">☰ 숲 찾기</button>
+  </div>
+
+  <section id="detail" class="detail" hidden aria-live="polite">
+    <button id="detailClose" class="icon-btn" type="button" aria-label="닫기">✕</button>
+    <div id="detailBody"></div>
+  </section>
+
+  <div class="presets" role="group" aria-label="카메라 이동">
+    <button type="button" data-preset="all" class="active">전국</button>
+    <button type="button" data-preset="capital">수도권</button>
+    <button type="button" data-preset="gangwon">강원</button>
+    <button type="button" data-preset="jiri">지리산</button>
+    <button type="button" data-preset="jeju">제주</button>
+    <button type="button" data-preset="me" class="me">내 주변</button>
+  </div>
+
+  <div id="hint" class="hint">드래그로 회전 · 휠/핀치로 확대 · 표식을 눌러 실제 데이터 확인</div>
+  <div id="labels" class="labels" aria-hidden="true"></div>
+  <div id="scalebar" class="scalebar"><i></i><b>100km</b></div>
+  <div class="vignette" aria-hidden="true"></div>
+  <div id="tooltip" class="tooltip" hidden></div>
+  <div id="toast" class="toast" hidden></div>
+
+  <div id="dataModal" class="modal" hidden>
+    <div class="modal-card">
+      <button id="dataClose" class="icon-btn" type="button" aria-label="닫기">✕</button>
+      <h2>이 서비스에 쓴 산림공공데이터</h2>
+      <p class="modal-sub">모든 수치는 원본 공개 데이터에서 직접 집계했습니다. 지형은 실제 표고(DEM)를 3D로 옮겼습니다.</p>
+      <div id="dataList" class="data-list"></div>
+      <p class="modal-foot">출처: 공공데이터포털(data.go.kr) · 산림청 개방데이터 · 이용조건: 공공누리 출처표시(제1유형) 기준 준수</p>
+    </div>
+  </div>
+
+  <div id="caseModal" class="modal" hidden>
+    <div class="modal-card">
+      <button id="caseClose" class="icon-btn" type="button" aria-label="닫기">✕</button>
+      <span class="modal-kicker">산림공공데이터 활용 사례 · 서비스형</span>
+      <h2>숲나침반 3D</h2>
+      <p class="modal-sub">산림청 산림공공데이터 5종을 실제 지형 위에 올려, 전국 산림휴양 자원을 한 화면에서 비교·탐색하는 웹 서비스입니다. 설치 없이 브라우저에서 바로 동작하며, 서버·유료 API 없이 정적 호스팅으로 운영됩니다.</p>
+
+      <h4 class="case-h">활용한 데이터와 방식</h4>
+      <ul class="case-list">
+        <li><b>전국휴양림표준데이터</b>(표준데이터) — 186개 휴양림의 좌표·면적·수용인원·입장료·숙박가능여부·주요시설·관리기관·문의를 지도 표식과 상세 카드로</li>
+        <li><b>숲나들e 100대명산 정보</b>(CSV) — 100개 산의 좌표·높이·난이도·산행시간·산행코스·교통을 표식과 상세로</li>
+        <li><b>전국 치유의숲 좌표</b>(SHP 공간정보) — 38개 치유의숲 좌표를 지도에 투영</li>
+        <li><b>국가숲길 코스</b>(GPX <b id="caseTrail">54</b>트랙) — 실제 GPS 궤적을 지형 위 3D 라인으로 그리고 구간 거리·누적 상승·고도 프로필을 계산</li>
+        <li><b>전국보호수표준데이터</b>(표준데이터) — 9,945그루 노거수의 수종·수령·규격·소재지를 레이어로, 300년 이상 필터</li>
+      </ul>
+      <p class="case-p">파일데이터(CSV·JSON·SHP)와 공간데이터(GPX)를 내려받아 브라우저에서 직접 파싱합니다. 좌표계가 다른 SHP(UTM-K)는 WGS84로 변환했고, 등산로·산 정보는 원본 좌표를 그대로 씁니다.</p>
+
+      <h4 class="case-h">활용 내용과 효과</h4>
+      <ul class="case-list">
+        <li><b>흩어져 있던 4개 사이트를 한 화면으로.</b> 숲나들e·산림청·지자체 자료를 각각 검색해야 했던 휴양림·명산·치유의숲·숲길을 한 지도에서 함께 비교합니다.</li>
+        <li><b>“어디로 갈까”를 지도 위에서 5초에.</b> 시도·숙박가능·입장료 무료·난이도·보호수 수령 필터로 조건에 맞는 숲만 남기고, 표식을 누르면 원본 값이 그대로 열립니다.</li>
+        <li><b>거리·고도를 실제 지형으로.</b> 실제 표고(DEM) 위에 표식을 올려 해발·산세를 눈으로 확인하고, 숲길은 구간 거리와 고도 그래프까지 자동 계산합니다.</li>
+        <li><b>아이와 함께 가는 가족에게.</b> 숙박 가능한 휴양림과 난이도 낮은 명산을 한 번에 걸러 가족 나들이 후보를 좁힐 수 있습니다.</li>
+        <li><b>운영 부담 0원.</b> 정적 파일만으로 동작해 서버·API 키·유지비가 없고, 스마트폰 브라우저에서도 같은 화면을 씁니다.</li>
+      </ul>
+
+      <h4 class="case-h">데이터 이용자 관점의 개선 아이디어</h4>
+      <ul class="case-list">
+        <li><b>등산로 표준데이터에 좌표를.</b> 전국등산로표준데이터(404개 노선)는 산명·난이도·거리는 있지만 경로 좌표가 없어 지도에 그릴 수 없습니다. GPX·SHP 링크 컬럼을 표준 항목으로 넣어 주시면 노선 단위 탐색이 가능해집니다.</li>
+        <li><b>휴양림 표준데이터의 좌표·갱신 정합성.</b> 186건 중 일부는 좌표 정밀도가 낮거나 갱신일이 오래되어, 위치 정확도 확인(지오코딩 검증)과 기준일자 필수화가 필요합니다.</li>
+        <li><b>데이터 간 식별자 연결.</b> 휴양림·명산·숲길이 서로 다른 코드 체계를 써서 같은 숲을 함께 묶기 어렵습니다. 기관 코드 체계를 공유하면 “이 산 근처 휴양림·숲길” 같은 결합 서비스가 쉬워집니다.</li>
+        <li><b>실시간 정보의 파일 제공.</b> 산불·산사태·입산통제 정보가 API 키 발급 없이도 파일로 주기 갱신되면, 본 서비스처럼 키 없는 정적 서비스에서도 안전 정보를 함께 보여줄 수 있습니다.</li>
+      </ul>
+      <p class="modal-foot">기획·개발 김재동 · 2026.11 · 데이터 출처: 공공데이터포털(data.go.kr), 산림청 개방데이터 · 이용조건: 공공누리 출처표시</p>
+    </div>
+  </div>
+
+  <div id="helpModal" class="modal" hidden>
+    <div class="modal-card narrow">
+      <button id="helpClose" class="icon-btn" type="button" aria-label="닫기">✕</button>
+      <h2>숲나침반 3D 사용법</h2>
+      <p class="modal-sub">산림청 산림공공데이터로 만든 전국 산림휴양 탐색 지도입니다.</p>
+      <ol class="help-list">
+        <li><b>지도를 돌려 보세요.</b> 드래그로 회전, 휠·두 손가락으로 확대합니다.</li>
+        <li><b>표식을 누르면</b> 실제 공개데이터 값(시설·요금·난이도·산행코스·수령)이 열립니다.</li>
+        <li><b>왼쪽에서 레이어와 시도를 좁히면</b> 지도와 목록이 함께 걸러집니다.</li>
+        <li><b>국가숲길</b>은 실제 GPX 트랙을 지형에 얹었습니다. 눌러서 코스별 거리·누적 상승·고도 그래프를 보세요.</li>
+        <li><b>내 주변</b>은 브라우저 위치 권한을 허용할 때 50km 안의 숲을 찾아 줍니다.</li>
+      </ol>
+      <p class="modal-foot">데이터 기준일은 항목별로 표시되며, 원본은 공공데이터포털에서 갱신됩니다.</p>
+    </div>
+  </div>
+
+  <noscript><p class="noscript">이 서비스는 WebGL 3D 지도를 사용합니다. JavaScript를 켜 주세요.</p></noscript>
+</div>
+<script src="vendor/three.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
