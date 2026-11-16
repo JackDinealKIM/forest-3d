@@ -546,7 +546,7 @@
       const wasDrag = moved >= 6;
       dragging = false;
       try { el.releasePointerCapture(e.pointerId); } catch (_) { }
-      if (!wasDrag) handleClick();
+      if (!wasDrag) { updatePointer(e); handleClick(); }
     });
     el.addEventListener('pointerleave', () => { dragging = false; S.hoverItem = null; pinRefresh(); pointerNDC.set(-10, -10); });
     el.addEventListener('wheel', (e) => {
@@ -1651,7 +1651,7 @@
       animate();
       window.__forest3d = {
         S, cam, scene, camera, renderer, instanced, select, applyFilters, applyMood, startFly, stopFly,
-        nearbySummary, fly, pickAt, itemLatLon, buildRadiusRing, ensureContours
+        nearbySummary, fly, pickAt, itemLatLon, buildRadiusRing, ensureContours, pointerNDC, raycaster
       };
     } catch (e) {
       console.error(e);
