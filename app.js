@@ -1106,11 +1106,12 @@
     fly.prof = (t.prof && t.prof.length > 1) ? t.prof : pts.map((p) => p.e);
 
     const p0 = pts[0], p1 = pts[Math.min(8, pts.length - 1)];
-    const dir = p1.v.clone().sub(p0.v).normalize();
-    dir.y = clamp(dir.y, -0.22, 0.22);
-    dir.normalize();
-    fly.pos.copy(p0.v).addScaledVector(dir, -18).add(new THREE.Vector3(0, 34, 0));
-    fly.look.copy(p0.v).addScaledVector(dir, 46);
+    const dir0 = p1.v.clone().sub(p0.v);
+    const dirH = new THREE.Vector3(dir0.x, 0, dir0.z);
+    if (dirH.lengthSq() < 1e-8) dirH.set(0, 0, -1);
+    dirH.normalize();
+    fly.pos.copy(p0.v).addScaledVector(dirH, -16).add(new THREE.Vector3(0, 46, 0));
+    fly.look.copy(p0.v).addScaledVector(dirH, 62).add(new THREE.Vector3(0, -11, 0));
     camera.position.copy(fly.pos);
     camera.lookAt(fly.look);
 
@@ -1181,17 +1182,17 @@
     const smp = sampleFly(fly.s);
     const ahead = sampleFly(Math.min(1, fly.s + 0.014));
     const dir = ahead.p.clone().sub(smp.p);
-    if (dir.lengthSq() < 1e-8) dir.set(0, -0.2, -1);
-    dir.y = clamp(dir.y, -0.22, 0.22);
+    dir.y = 0;
+    if (dir.lengthSq() < 1e-8) dir.set(0, 0, -1);
     dir.normalize();
-    const desired = smp.p.clone().addScaledVector(dir, -18).add(new THREE.Vector3(0, 34, 0));
+    const desired = smp.p.clone().addScaledVector(dir, -16).add(new THREE.Vector3(0, 46, 0));
     fly.pos.lerp(desired, 1 - Math.exp(-dt * 3.4));
     // 카메라가 지형을 뚫지 않도록 최소 고도 유지
     const clat = P.latC - fly.pos.z / (KM_LAT * P.k);
     const clon = P.lonC + fly.pos.x / (KM_LON * P.k);
     const groundY = heightAt(clat, clon) * ELE_SCALE;
     if (fly.pos.y < groundY + 12) fly.pos.y = groundY + 12;
-    const wantLook = smp.p.clone().addScaledVector(dir, 46).add(new THREE.Vector3(0, 2, 0));
+    const wantLook = smp.p.clone().addScaledVector(dir, 62).add(new THREE.Vector3(0, -11, 0));
     fly.look.lerp(wantLook, 1 - Math.exp(-dt * 4.8));
     camera.position.copy(fly.pos);
     camera.lookAt(fly.look);
