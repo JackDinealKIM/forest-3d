@@ -289,3 +289,122 @@ body{
   .panel-toggle{left:14px;transform:none;bottom:66px}
   #panelOpen{padding:8px 14px;font-size:12px}
 }
+
+/* ------- 3D 분위기 전환 (맑은 낮 / 황금 노을 / 산림 안개) ------- */
+.moods{display:flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:999px;background:rgba(8,26,20,.72);backdrop-filter:blur(10px)}
+.moods button{
+  appearance:none;border:0;background:transparent;color:var(--muted);font:600 11.5px var(--font);
+  padding:6px 10px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;transition:.16s;line-height:1;
+}
+.moods button i{font-style:normal;font-size:12.5px}
+.moods button:hover{color:var(--text)}
+.moods button.on{background:linear-gradient(150deg,rgba(157,255,205,.92),rgba(79,211,154,.86));color:#04241a;box-shadow:0 4px 14px rgba(80,220,160,.28)}
+
+/* ------- 3D 포인트 위 이름 배지 ------- */
+.pin{
+  position:absolute;left:0;top:0;z-index:26;pointer-events:none;transform:translate(-50%,-100%);
+  display:flex;flex-direction:column;gap:1px;padding:6px 11px 7px;border-radius:10px;
+  background:rgba(4,20,14,.93);border:1px solid var(--line-strong);box-shadow:0 10px 26px rgba(0,0,0,.55);
+  white-space:nowrap;opacity:0;transition:opacity .16s;
+}
+.pin.show{opacity:1}
+.pin b{font:700 12.5px var(--font);letter-spacing:-.2px;color:#f2fff8}
+.pin small{font:600 10.5px var(--font);color:var(--muted);letter-spacing:.01em}
+.pin .pin-chip{font:700 9px var(--font);letter-spacing:.07em;color:#04241a;background:var(--mint);border-radius:4px;padding:2px 5px;margin-right:5px;vertical-align:1px;display:inline-block}
+.pin::after{
+  content:"";position:absolute;left:50%;bottom:-5px;width:9px;height:9px;background:rgba(4,20,14,.93);
+  border-right:1px solid var(--line-strong);border-bottom:1px solid var(--line-strong);
+  transform:translateX(-50%) rotate(45deg);
+}
+.pin.k-myeongsan .pin-chip{background:var(--gold)}
+.pin.k-healing .pin-chip{background:var(--blue)}
+.pin.k-tree .pin-chip{background:var(--tree)}
+.pin.k-trail .pin-chip{background:#bfe9d0}
+.pin.hover{border-color:rgba(122,232,182,.55);padding:5px 9px;background:rgba(4,20,14,.88)}
+
+/* ------- 국가숲길 3D 코스 비행 HUD ------- */
+.fly-hud{
+  position:absolute;left:50%;bottom:72px;transform:translateX(-50%);z-index:28;width:min(560px,calc(100% - 26px));
+  background:linear-gradient(180deg,rgba(6,26,20,.95),rgba(4,18,13,.97));border:1px solid var(--line-strong);
+  border-radius:16px;box-shadow:var(--shadow);padding:12px 14px 10px;backdrop-filter:blur(14px);
+  animation:slideUp .26s ease-out;
+}
+@keyframes slideUp{from{opacity:0;transform:translate(-50%,12px)}to{opacity:1;transform:translateX(-50%)}}
+.fly-head{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+.fly-kicker{
+  font:700 9px var(--font);letter-spacing:.1em;text-transform:uppercase;color:#04241a;
+  background:linear-gradient(90deg,#9dffcd,#ffe0a3);padding:4px 7px;border-radius:5px;white-space:nowrap;
+}
+.fly-head b{font-size:13.5px;letter-spacing:-.3px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fly-btns{display:flex;gap:6px}
+.fly-btns button{
+  appearance:none;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--text);
+  font:600 11.5px var(--font);padding:5px 10px;border-radius:8px;cursor:pointer;
+}
+.fly-btns button:hover{border-color:var(--line-strong);background:rgba(127,240,184,.14)}
+.fly-btns .fly-stop{color:#ffd9c9;border-color:rgba(255,160,120,.34)}
+.fly-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:6px}
+.fly-stats em{display:block;font-style:normal;font:600 9px var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.fly-stats b{font:700 13px var(--font);color:#eafff4;letter-spacing:-.2px}
+.fly-graph{position:relative;height:54px}
+.fly-graph svg{width:100%;height:54px;display:block;overflow:visible}
+.fly-cursor{
+  position:absolute;top:6px;bottom:0;left:0;width:2px;background:var(--mint);border-radius:2px;
+  box-shadow:0 0 12px var(--mint);transition:left .06s linear;
+}
+.fly-cursor::after{content:"";position:absolute;left:50%;top:-4px;width:8px;height:8px;border-radius:50%;background:var(--mint);transform:translateX(-50%);box-shadow:0 0 12px var(--mint)}
+
+/* ------- 선택 지점 반경 연계 탐색 ------- */
+.near{margin-top:15px;padding-top:12px;border-top:1px dashed var(--line)}
+.near h4{margin:0 0 8px}
+.near-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:9px;flex-wrap:wrap}
+.near-radius{display:flex;gap:4px}
+.near-radius button{
+  appearance:none;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--muted);
+  font:600 10.5px var(--font);padding:4px 8px;border-radius:7px;cursor:pointer;
+}
+.near-radius button.on{background:rgba(127,240,184,.18);border-color:var(--line-strong);color:var(--mint)}
+.near-counts{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:9px}
+.near-counts div{border:1px solid var(--line);border-radius:8px;padding:5px 4px;text-align:center;background:rgba(255,255,255,.02)}
+.near-counts b{display:block;font:700 13px var(--font);color:#eafff4}
+.near-counts em{font-style:normal;font:600 9px var(--font);color:var(--muted);letter-spacing:.04em}
+.near-list{display:flex;flex-direction:column;gap:4px}
+.near-list button{
+  appearance:none;display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;
+  border:1px solid transparent;background:rgba(255,255,255,.03);border-radius:8px;padding:6px 8px;cursor:pointer;
+  font:600 11.5px var(--font);color:#d9efe4;
+}
+.near-list button:hover{border-color:var(--line-strong);background:rgba(127,240,184,.1)}
+.near-list button span{color:var(--muted);font-weight:500;white-space:nowrap}
+
+@media (max-width:760px){
+  .moods button span{display:none}
+  .moods button{padding:7px 9px}
+  .moods button i{font-size:13.5px}
+  .fly-hud{bottom:12px;padding:10px 11px 8px}
+  .fly-stats{grid-template-columns:repeat(2,1fr);gap:6px}
+  .fly-graph{height:44px}
+  .fly-graph svg{height:44px}
+  .pin b{font-size:11.5px}
+  .pin small{font-size:9.5px}
+  .near-counts{grid-template-columns:repeat(4,1fr)}
+}
+
+/* 비행 중에는 지도 조작 UI를 잠시 숨긴다 */
+body.flying .presets,body.flying .hint,body.flying .panel-toggle,body.flying .scalebar{opacity:0;pointer-events:none;transition:opacity .25s}
+.detail-actions .act-fly{
+  background:linear-gradient(90deg,rgba(157,255,205,.92),rgba(255,224,163,.9));color:#04241a;
+  border-color:transparent;font-weight:800;
+}
+.detail-actions .act-fly:hover{filter:brightness(1.06)}
+
+/* 모바일 상단 바: 브랜드와 분위기 버튼이 겹치지 않게 한 줄 더 쓴다 */
+@media (max-width:620px){
+  .topbar{flex-wrap:wrap;row-gap:9px}
+  .brand-text b{font-size:15px}
+  .brand-text small{display:none}
+  .top-actions{flex:1 1 100%;justify-content:space-between}
+  .moods{padding:2px}
+  .moods button{padding:6px 8px}
+  .chip-data{font-size:10.5px;padding:6px 9px}
+}

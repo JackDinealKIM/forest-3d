@@ -24,7 +24,7 @@
     hyuyang: [], myeongsan: [], healing: [], trees: [], trails: [],
     visible: { hyuyang: true, myeongsan: true, trail: true, healing: true, tree: false },
     sido: '', extra: '', search: '',
-    selected: null, geo: null,
+    selected: null, geo: null, radiusKm: 20, mood: 'day', nearList: [],
     span: { width: WORLD_W, depth: 0 }
   };
 
@@ -63,6 +63,7 @@
   let renderer, scene, camera, raycaster;
   const pointerNDC = new THREE.Vector2(-10, -10);
   let terrainMesh, markerGroups = {}, instanced = {}, treePoints, trailLines, trailSel, particles, mePin;
+  let hemi, sun, rim, ambient, contourMesh = null, seaMesh = null;
   const spriteBillboards = [];
 
   function initThree() {
@@ -83,14 +84,16 @@
     raycaster = new THREE.Raycaster();
     raycaster.params.Line.threshold = 1.4;
 
-    scene.add(new THREE.HemisphereLight(0xdcefff, 0x2a5442, 1.5));
-    const sun = new THREE.DirectionalLight(0xfff4dd, 1.55);
+    hemi = new THREE.HemisphereLight(0xdcefff, 0x2a5442, 1.5);
+    scene.add(hemi);
+    sun = new THREE.DirectionalLight(0xfff4dd, 1.55);
     sun.position.set(-260, 760, 340);
     scene.add(sun);
-    const rim = new THREE.DirectionalLight(0x7fc0ff, 0.65);
+    rim = new THREE.DirectionalLight(0x7fc0ff, 0.65);
     rim.position.set(520, 300, -560);
     scene.add(rim);
-    scene.add(new THREE.AmbientLight(0x3a5f4d, 1.35));
+    ambient = new THREE.AmbientLight(0x3a5f4d, 1.35);
+    scene.add(ambient);
 
     for (const k of ['hyuyang', 'myeongsan', 'healing', 'tree', 'trail']) {
       markerGroups[k] = new THREE.Group();
@@ -99,19 +102,109 @@
     window.addEventListener('resize', onResize, { passive: true });
   }
 
-  function skyTexture() {
+  function skyTexture(colors) {
+    const c = colors || ['#02090f', '#061a1a', '#0b2a26', '#071612'];
     const cv = document.createElement('canvas');
     cv.width = 8; cv.height = 256;
     const ctx = cv.getContext('2d');
     const g = ctx.createLinearGradient(0, 0, 0, 256);
-    g.addColorStop(0, '#02090f');
-    g.addColorStop(0.42, '#061a1a');
-    g.addColorStop(0.72, '#0b2a26');
-    g.addColorStop(1, '#071612');
+    g.addColorStop(0, c[0]);
+    g.addColorStop(0.42, c[1]);
+    g.addColorStop(0.72, c[2]);
+    g.addColorStop(1, c[3]);
     ctx.fillStyle = g; ctx.fillRect(0, 0, 8, 256);
     const t = new THREE.CanvasTexture(cv);
     if ('colorSpace' in t) t.colorSpace = THREE.SRGBColorSpace;
     return t;
+  }
+
+  // ------------------------------------------------------------- 분위기·조명 모드
+  const MOODS = {
+    day: {
+      exposure: 1.25,
+      hemiSky: 0xdcefff, hemiGround: 0x2a5442, hemiI: 1.5,
+      sunColor: 0xfff4dd, sunI: 1.55, sunPos: [-260, 760, 340],
+      rimColor: 0x7fc0ff, rimI: 0.65,
+      ambColor: 0x3a5f4d, ambI: 1.35,
+      fog: 0x0a2420, fogD: 0.00040,
+      sky: ['#02090f', '#061a1a', '#0b2a26', '#071612'],
+      contour: 0, emissive: 0x0d2018, sea: 0x123f57, seaEm: 0x0a2230
+    },
+    sunset: {
+      exposure: 1.5,
+      hemiSky: 0xffd2a0, hemiGround: 0x3a2216, hemiI: 1.1,
+      sunColor: 0xff9a4d, sunI: 2.15, sunPos: [560, 175, 300],
+      rimColor: 0xff6f5e, rimI: 0.95,
+      ambColor: 0x7a4630, ambI: 1.05,
+      fog: 0x3d1f18, fogD: 0.00055,
+      sky: ['#150818', '#431420', '#9c4227', '#2a1220'],
+      contour: 0, emissive: 0x2b1206, sea: 0x36233a, seaEm: 0x3a1524
+    },
+    mist: {
+      exposure: 1.08,
+      hemiSky: 0xd8ecf6, hemiGround: 0x2c463e, hemiI: 1.85,
+      sunColor: 0xeaf6ff, sunI: 0.75, sunPos: [-220, 540, 240],
+      rimColor: 0x9fd8ff, rimI: 0.45,
+      ambColor: 0x52706a, ambI: 1.45,
+      fog: 0x7d9f99, fogD: 0.00135,
+      sky: ['#0d2430', '#1e4644', '#568079', '#7fa39a'],
+      contour: 1, emissive: 0x163027, sea: 0x5c8079, seaEm: 0x2e4a44
+    }
+  };
+
+  function applyMood(key) {
+    const m = MOODS[key] || MOODS.day;
+    S.mood = MOODS[key] ? key : 'day';
+    renderer.toneMappingExposure = m.exposure;
+    hemi.color.setHex(m.hemiSky); hemi.groundColor.setHex(m.hemiGround); hemi.intensity = m.hemiI;
+    sun.color.setHex(m.sunColor); sun.intensity = m.sunI; sun.position.set(m.sunPos[0], m.sunPos[1], m.sunPos[2]);
+    rim.color.setHex(m.rimColor); rim.intensity = m.rimI;
+    ambient.color.setHex(m.ambColor); ambient.intensity = m.ambI;
+    scene.fog = new THREE.FogExp2(m.fog, m.fogD);
+    if (scene.background && scene.background.dispose) scene.background.dispose();
+    scene.background = skyTexture(m.sky);
+    if (terrainMesh && terrainMesh.material.emissive) terrainMesh.material.emissive.setHex(m.emissive);
+    if (seaMesh) { seaMesh.material.color.setHex(m.sea); seaMesh.material.emissive.setHex(m.seaEm); }
+    if (m.contour) { ensureContours(); if (contourMesh) contourMesh.visible = true; }
+    else if (contourMesh) contourMesh.visible = false;
+    document.querySelectorAll('.moods button').forEach((b) => b.classList.toggle('on', b.dataset.mood === S.mood));
+  }
+
+  // 100m 등고선을 지형 텍스처로 생성 (산림 안개 모드에서 고도 강조)
+  function ensureContours() {
+    if (contourMesh || !terrainMesh) return;
+    const G = S.meta.grid, HV = S.grid, SZ = 1024, STEP = 100;
+    const cv = document.createElement('canvas'); cv.width = cv.height = SZ;
+    const ctx = cv.getContext('2d');
+    const img = ctx.createImageData(SZ, SZ);
+    const hAt = (r, c) => HV[clamp(Math.round(r), 0, G - 1) * G + clamp(Math.round(c), 0, G - 1)];
+    for (let y = 0; y < SZ; y++) {
+      const r = (y / (SZ - 1)) * (G - 1);
+      for (let x = 0; x < SZ; x++) {
+        const c = (x / (SZ - 1)) * (G - 1);
+        const h = hAt(r, c);
+        if (h < 4) continue;
+        const lv = Math.floor(h / STEP);
+        if (Math.floor(hAt(r, c + 1.3) / STEP) === lv && Math.floor(hAt(r + 1.3, c) / STEP) === lv) continue;
+        const i = (y * SZ + x) * 4;
+        const major = lv % 5 === 0;
+        img.data[i] = major ? 235 : 150;
+        img.data[i + 1] = 255;
+        img.data[i + 2] = major ? 240 : 222;
+        img.data[i + 3] = major ? 210 : 105;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    const tex = new THREE.CanvasTexture(cv);
+    if ('colorSpace' in tex) tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    contourMesh = new THREE.Mesh(terrainMesh.geometry, new THREE.MeshBasicMaterial({
+      map: tex, transparent: true, opacity: 0.62, depthWrite: false,
+      polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4
+    }));
+    contourMesh.visible = false;
+    contourMesh.renderOrder = 2;
+    scene.add(contourMesh);
   }
 
   function koreaFitRadius() {
@@ -180,6 +273,7 @@
     const W = S.span.width, D = S.span.depth;
     const pos = new Float32Array(N * N * 3);
     const col = new Float32Array(N * N * 4);
+    const uv = new Float32Array(N * N * 2);
     const rock = new THREE.Color(0x6e6a56);
     const cTmp = new THREE.Color();
     const hAt = (r, c) => S.grid[clamp(Math.round(r), 0, G - 1) * G + clamp(Math.round(c), 0, G - 1)];
@@ -194,6 +288,8 @@
         pos[i] = (c / (N - 1) - 0.5) * W;
         pos[i + 1] = e * ELE_SCALE;
         pos[i + 2] = (r / (N - 1) - 0.5) * D;
+        const ui = (r * N + c) * 2;
+        uv[ui] = c / (N - 1); uv[ui + 1] = 1 - r / (N - 1);
 
         const dz = hAt(gr + 1, gc) - hAt(gr - 1, gc);      // north-south slope
         const dx = hAt(gr, gc + 1) - hAt(gr, gc - 1);      // east-west slope
@@ -222,6 +318,7 @@
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(col, 4));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     geo.setIndex(new THREE.BufferAttribute(idx, 1));
     geo.computeVertexNormals();
     const tMat = new THREE.MeshLambertMaterial({
@@ -241,6 +338,7 @@
     );
     sea.rotation.x = -Math.PI / 2;
     sea.position.y = -0.2;
+    seaMesh = sea;
     scene.add(sea);
   }
 
@@ -430,7 +528,7 @@
     });
     el.addEventListener('pointermove', (e) => {
       updatePointer(e);
-      if (!dragging) return;
+      if (!dragging || fly.active) return;
       const dx = e.clientX - lx, dy = e.clientY - ly;
       lx = e.clientX; ly = e.clientY;
       moved += Math.abs(dx) + Math.abs(dy);
@@ -450,7 +548,7 @@
       try { el.releasePointerCapture(e.pointerId); } catch (_) { }
       if (!wasDrag) handleClick();
     });
-    el.addEventListener('pointerleave', () => { dragging = false; hideTooltip(); pointerNDC.set(-10, -10); });
+    el.addEventListener('pointerleave', () => { dragging = false; S.hoverItem = null; pinRefresh(); pointerNDC.set(-10, -10); });
     el.addEventListener('wheel', (e) => {
       e.preventDefault();
       cam.radius = clamp(cam.radius * (1 + Math.sign(e.deltaY) * 0.08), 55, 1700);
@@ -466,13 +564,13 @@
       if (e.touches.length === 2 && pinch0 > 0) {
         const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
         cam.radius = clamp(pinchR0 * (pinch0 / Math.max(1, d)), 55, 1700);
-        hideTooltip();
+        S.hoverItem = null; pinRefresh();
       }
     }, { passive: true });
     el.addEventListener('touchend', () => { pinch0 = 0; });
 
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') { closeDetail(); closeModals(); }
+      if (e.key === 'Escape') { if (fly.active) stopFly(false); else { closeDetail(); closeModals(); } }
       if (e.key === '+' || e.key === '=') cam.radius = clamp(cam.radius * 0.86, 55, 1700);
       if (e.key === '-') cam.radius = clamp(cam.radius * 1.16, 55, 1700);
     });
@@ -486,44 +584,88 @@
   }
 
   // ------------------------------------------------------------- picking
-  let hoverT = 0, lastHover = null;
-  function doHover() {
-    const now = performance.now();
-    if (now - hoverT < 60) return;
-    hoverT = now;
-    raycaster.setFromCamera(pointerNDC, camera);
-    const targets = [];
-    for (const k of ['hyuyang', 'myeongsan', 'healing']) if (S.visible[k]) targets.push(instanced[k]);
-    if (S.visible.trail) targets.push(trailLines);
+  const KIND_LABEL = { hyuyang: '휴양림', myeongsan: '100대명산', healing: '치유의숲', trail: '국가숲길', tree: '보호수' };
 
-    const hits = raycaster.intersectObjects(targets, false);
-    let found = null;
+  function itemLatLon(kind, item) {
+    if (kind === 'tree') return { lat: item[8], lon: item[9] };
+    if (kind === 'trail') {
+      const pts = item.track.pts, m = pts[Math.floor(pts.length / 2)];
+      return { lat: m[0], lon: m[1] };
+    }
+    return { lat: item.lat, lon: item.lon };
+  }
+
+  function itemName(kind, item) {
+    if (kind === 'tree') return item[0] + ' 보호수';
+    if (kind === 'trail') return courseName(item.course) + ' · ' + item.track.id;
+    return item.n || '이름 없음';
+  }
+
+  function itemSub(kind, item) {
+    if (kind === 'hyuyang') return '자연휴양림 · ' + (item.sd || '') + (item.stay === 'Y' ? ' · 숙박' : '');
+    if (kind === 'myeongsan') return '100대명산 · ' + fmtNum(Math.round(item.h)) + 'm' + (item.level && item.level !== '-' ? ' · ' + item.level : '');
+    if (kind === 'healing') return '치유의숲 · ' + (item.kind || '') + (item.region ? ' · ' + item.region : '');
+    if (kind === 'trail') return '국가숲길 · ' + fmtDist(item.track.dist) + ' · 누적 상승 ' + fmtNum(item.track.up) + 'm';
+    if (kind === 'tree') return '보호수 · ' + item[2] + '년 · ' + (item[5] || '') + ' ' + (item[6] || '');
+    return '';
+  }
+
+  function badgeKey(kind, item) {
+    if (kind === 'tree') return 't' + item[8] + ',' + item[9] + ',' + item[0];
+    if (kind === 'trail') return 'r' + item.course + item.track.id;
+    return 'i' + (item.n || '') + (item.lat || '') + (item.lon || '');
+  }
+
+  function pickTargets() {
+    const targets = [];
+    for (const k of ['hyuyang', 'myeongsan', 'healing']) if (S.visible[k] && instanced[k]) targets.push(instanced[k]);
+    if (S.visible.tree && treePoints) targets.push(treePoints);
+    if (S.visible.trail) targets.push(trailLines);
+    return targets;
+  }
+
+  function pickAt() {
+    raycaster.setFromCamera(pointerNDC, camera);
+    raycaster.params.Points.threshold = clamp(cam.cRadius * 0.0075, 1.8, 6.5);
+    const hits = raycaster.intersectObjects(pickTargets(), false);
     for (const h of hits) {
       const ud = h.object.userData;
       if (ud.kind === 'trail') {
         const meta = ud.segMeta[Math.floor(h.index / 2)];
-        if (meta && matches('trail', meta)) { found = { kind: 'trail', item: meta, obj: h.object }; break; }
+        if (meta && matches('trail', meta)) return { kind: 'trail', item: meta, instanceId: null };
+      } else if (ud.kind === 'tree') {
+        const t = S.trees[h.index];
+        if (t && matches('tree', t)) return { kind: 'tree', item: t, instanceId: null };
       } else if (h.instanceId != null) {
         const it = ud.items[h.instanceId];
-        if (it && matches(ud.kind, it)) { found = { kind: ud.kind, item: it, obj: h.object, instanceId: h.instanceId }; break; }
+        if (it && matches(ud.kind, it)) return { kind: ud.kind, item: it, instanceId: h.instanceId };
       }
     }
-    // hover colors
-    const key = found ? found.kind + ':' + (found.instanceId != null ? found.instanceId : found.item.track.id) : null;
+    return null;
+  }
+
+  let hoverT = 0, lastHover = null, hoveredInstance = null;
+  function doHover() {
+    const now = performance.now();
+    if (now - hoverT < 60) return;
+    hoverT = now;
+    const found = pickAt();
+    const key = found ? found.kind + ':' + (found.instanceId != null ? found.instanceId : badgeKey(found.kind, found.item)) : null;
     if (key !== lastHover) {
       restoreHoverColors();
       if (found && found.instanceId != null) {
         const im = instanced[found.kind];
         im.setColorAt(found.instanceId, new THREE.Color(0xffffff));
         if (im.instanceColor) im.instanceColor.needsUpdate = true;
+        hoveredInstance = { kind: found.kind, id: found.instanceId };
       }
       lastHover = key;
     }
-    if (found) showTooltip(found.kind, found.item);
-    else hideTooltip();
+    S.hoverItem = found;
     document.body.style.cursor = found ? 'pointer' : '';
+    if (S.hoverItem) pinRefresh();
   }
-  let hoveredInstance = null;
+
   function restoreHoverColors() {
     if (hoveredInstance) {
       const im = instanced[hoveredInstance.kind];
@@ -533,38 +675,42 @@
     }
   }
 
-  function showTooltip(kind, item) {
-    if (!item) return hideTooltip();
-    const el = $('#tooltip');
-    let name = '', sub = '';
-    if (kind === 'hyuyang') { name = item.n; sub = '자연휴양림 · ' + (item.sd || '') + (item.stay === 'Y' ? ' · 숙박' : ''); }
-    else if (kind === 'myeongsan') { name = item.n; sub = '100대명산 · ' + fmtNum(Math.round(item.h)) + 'm'; }
-    else if (kind === 'healing') { name = item.n; sub = '치유의숲 · ' + (item.kind || ''); }
-    else if (kind === 'trail') { name = courseName(item.course); sub = '국가숲길 · ' + fmtDist(item.track.dist); }
-    else return hideTooltip();
-    el.innerHTML = esc(name) + '<small>' + esc(sub) + '</small>';
-    el.style.left = (S.px || 0) + 'px';
-    el.style.top = (S.py || 0) + 'px';
-    el.hidden = false;
+  // ------------------------------------------------------------- 3D 포인트 위 이름 배지
+  const pinV = new THREE.Vector3();
+  function pinPoint(kind, item) {
+    const ll = itemLatLon(kind, item);
+    return pinV.set(projX(ll.lon), heightAt(ll.lat, ll.lon) * ELE_SCALE + 3.4, projZ(ll.lat));
   }
-  function hideTooltip() { $('#tooltip').hidden = true; }
+  function pinRefresh() {
+    const el = $('#pin');
+    if (!el) return;
+    const cur = S.selected || S.hoverItem;
+    const sheet = $('#detail');
+    if (!cur || fly.active || (isMobile() && cur === S.selected && sheet && !sheet.hidden)) {
+      el.classList.remove('show'); el.hidden = true; el._key = null; return;
+    }
+    el.hidden = false;
+    const isSel = cur === S.selected;
+    const key = (isSel ? 'sel|' : 'hov|') + cur.kind + '|' + badgeKey(cur.kind, cur.item);
+    if (el._key !== key) {
+      const name = itemName(cur.kind, cur.item), sub = itemSub(cur.kind, cur.item);
+      el.className = 'pin k-' + cur.kind + (isSel ? ' sel' : ' hover');
+      el.innerHTML = '<b><span class="pin-chip">' + esc(KIND_LABEL[cur.kind] || '') + '</span>' + esc(name) + '</b>'
+        + (sub ? '<small>' + esc(sub) + '</small>' : '');
+      el._key = key;
+    }
+    const w = renderer.domElement.clientWidth, h = renderer.domElement.clientHeight;
+    const p = pinPoint(cur.kind, cur.item).project(camera);
+    if (p.z > 1 || Math.abs(p.x) > 1.08 || Math.abs(p.y) > 1.08) { el.classList.remove('show'); el.hidden = true; return; }
+    el.style.left = ((p.x * 0.5 + 0.5) * w).toFixed(1) + 'px';
+    el.style.top = ((-p.y * 0.5 + 0.5) * h).toFixed(1) + 'px';
+    el.classList.add('show');
+  }
 
   function handleClick() {
-    raycaster.setFromCamera(pointerNDC, camera);
-    const targets = [];
-    for (const k of ['hyuyang', 'myeongsan', 'healing']) if (S.visible[k]) targets.push(instanced[k]);
-    if (S.visible.trail) targets.push(trailLines);
-    const hits = raycaster.intersectObjects(targets, false);
-    for (const h of hits) {
-      const ud = h.object.userData;
-      if (ud.kind === 'trail') {
-        const meta = ud.segMeta[Math.floor(h.index / 2)];
-        if (meta && matches('trail', meta)) return select('trail', meta);
-      } else if (h.instanceId != null) {
-        const it = ud.items[h.instanceId];
-        if (it && matches(ud.kind, it)) return select(ud.kind, it);
-      }
-    }
+    if (fly.active) return;
+    const hit = pickAt();
+    if (hit) return select(hit.kind, hit.item);
     closeDetail();
   }
 
@@ -592,21 +738,18 @@
   }
 
   function select(kind, item) {
+    if (fly.active) stopFly(true);
     S.selected = { kind, item };
-    if (kind === 'hyuyang' || kind === 'myeongsan' || kind === 'healing') {
-      showSelRing(projX(item.lon), heightAt(item.lat, item.lon) * ELE_SCALE, projZ(item.lat), COLOR[kind]);
-    } else if (kind === 'trail') {
-      const mid = item.track.pts[Math.floor(item.track.pts.length / 2)];
-      showSelRing(projX(mid[1]), heightAt(mid[0], mid[1]) * ELE_SCALE, projZ(mid[0]), 0xffffff);
-    }
+    const ll = itemLatLon(kind, item);
+    showSelRing(projX(ll.lon), heightAt(ll.lat, ll.lon) * ELE_SCALE, projZ(ll.lat), COLOR[kind] || 0xffffff);
     if (kind === 'trail') {
-      const t = item.track;
-      const mid = t.pts[Math.floor(t.pts.length / 2)];
-      focusOn(mid[0], mid[1], 250);
+      focusOn(ll.lat, ll.lon, 250);
       highlightTrail(item);
     } else {
-      focusOn(item.lat, item.lon, kind === 'myeongsan' ? 240 : 200);
+      focusOn(ll.lat, ll.lon, kind === 'myeongsan' ? 240 : (kind === 'tree' ? 120 : 200));
     }
+    pinRefresh();
+    buildRadiusRing(ll.lat, ll.lon, S.radiusKm);
     renderDetail(kind, item);
   }
 
@@ -645,9 +788,31 @@
     if (kind === 'hyuyang') html = detailHyuyang(item);
     else if (kind === 'myeongsan') html = detailMyeongsan(item);
     else if (kind === 'healing') html = detailHealing(item);
+    else if (kind === 'tree') html = detailTree(item);
     else if (kind === 'trail') html = detailTrail(item);
-    $('#detailBody').innerHTML = html;
+    $('#detailBody').innerHTML = html + nearbyBlock(kind, item);
     box.hidden = false;
+    const body = $('#detailBody');
+    if (body) body.scrollTop = 0;
+  }
+
+  function detailTree(t) {
+    const old = t[2] >= 300;
+    return `
+      <span class="kicker k-tree">보호수</span>
+      <h3>${esc(t[0])} 보호수</h3>
+      <p class="sub">${esc(t[7])}</p>
+      <dl class="kv">
+        <dt>수종</dt><dd>${esc(t[0])}</dd>
+        <dt>유형</dt><dd>${esc(t[1] || '-')}${old ? ' · 노거수' : ''}</dd>
+        <dt>수령</dt><dd>${fmtNum(t[2])}년${old ? ' (300년 이상)' : ''}</dd>
+        <dt>나무높이</dt><dd>${t[3] ? t[3] + 'm' : '-'}</dd>
+        <dt>가슴높이 둘레</dt><dd>${t[4] ? t[4] : '-'} <span style="color:var(--muted);font-size:11px">(원본 값)</span></dd>
+        <dt>지역</dt><dd>${esc((t[5] || '') + ' ' + (t[6] || ''))}</dd>
+        <dt>좌표</dt><dd>${Number(t[8]).toFixed(4)}, ${Number(t[9]).toFixed(4)}</dd>
+      </dl>
+      <div class="detail-actions"><button type="button" data-act="fit">지도에서 확대</button></div>
+      <div class="src">출처: 전국보호수표준데이터(산림청·지자체) · 수종·수령·규격·소재지 원본 값</div>`;
   }
 
   function detailHyuyang(it) {
@@ -728,7 +893,7 @@
       <h4>고도 프로필</h4>
       ${profileSVG(t.prof)}
       <div class="profile-meta"><span>시작</span><span>구간 고도</span><span>종료</span></div>
-      <div class="detail-actions"><button type="button" data-act="fit">코스로 이동</button></div>
+      <div class="detail-actions"><button type="button" data-act="fly" class="act-fly">🛩 3D 코스 비행</button><button type="button" data-act="fit">코스로 이동</button></div>
       <div class="src">출처: 한국등산트레킹지원센터「국가숲길 코스」 GPX · 고도는 실제 표고(DEM)에서 계산</div>`;
   }
 
@@ -754,17 +919,324 @@
   }
 
   document.addEventListener('click', (e) => {
-    const btn = e.target.closest && e.target.closest('[data-act="fit"]');
-    if (btn && S.selected) {
+    const fit = e.target.closest && e.target.closest('[data-act="fit"]');
+    if (fit && S.selected) {
       const k = S.selected.kind, it = S.selected.item;
-      if (k !== 'trail') focusOn(it.lat, it.lon, 130);
-      else {
-        const mid = it.track.pts[Math.floor(it.track.pts.length / 2)];
-        focusOn(mid[0], mid[1], 130);
+      const ll = itemLatLon(k, it);
+      focusOn(ll.lat, ll.lon, k === 'tree' ? 90 : 130);
+    }
+    const flyBtn = e.target.closest && e.target.closest('[data-act="fly"]');
+    if (flyBtn && S.selected && S.selected.kind === 'trail') startFly(S.selected.item);
+
+    const rBtn = e.target.closest && e.target.closest('[data-radius]');
+    if (rBtn) {
+      S.radiusKm = Number(rBtn.dataset.radius) || 20;
+      if (S.selected) {
+        const ll = itemLatLon(S.selected.kind, S.selected.item);
+        buildRadiusRing(ll.lat, ll.lon, S.radiusKm);
+        renderDetail(S.selected.kind, S.selected.item);
       }
     }
+
+    const nBtn = e.target.closest && e.target.closest('[data-near]');
+    if (nBtn) {
+      const r = S.nearList[Number(nBtn.dataset.near)];
+      if (r) select(r.kind, r.item);
+    }
   });
-  function closeDetail() { $('#detail').hidden = true; S.selected = null; if (selRing) selRing.visible = false; }
+  // ------------------------------------------------------------- 반경 연계 탐색 (ring)
+  const RING_SEGS = 128;
+  let ringStatic = null, ringPulseLine = null, ringPulseT = -1;
+  const ringCtx = { lat: 0, lon: 0, km: 20 };
+
+  function ringPts(lat, lon, km, segs) {
+    const arr = new Float32Array(segs * 3);
+    const dLat = km / KM_LAT;
+    const dLon = km / (111.32 * Math.cos(lat * Math.PI / 180));
+    for (let i = 0; i < segs; i++) {
+      const a = (i / segs) * Math.PI * 2;
+      const la = lat + dLat * Math.cos(a), lo = lon + dLon * Math.sin(a);
+      arr[i * 3] = projX(lo);
+      arr[i * 3 + 1] = heightAt(la, lo) * ELE_SCALE + 1.15;
+      arr[i * 3 + 2] = projZ(la);
+    }
+    return arr;
+  }
+
+  function buildRadiusRing(lat, lon, km) {
+    ringCtx.lat = lat; ringCtx.lon = lon; ringCtx.km = km;
+    if (!ringStatic) {
+      const g1 = new THREE.BufferGeometry();
+      g1.setAttribute('position', new THREE.BufferAttribute(new Float32Array(RING_SEGS * 3), 3));
+      ringStatic = new THREE.LineLoop(g1, new THREE.LineBasicMaterial({
+        color: 0x9dffcd, transparent: true, opacity: 0.7, depthWrite: false
+      }));
+      ringStatic.renderOrder = 3;
+      scene.add(ringStatic);
+      const g2 = new THREE.BufferGeometry();
+      g2.setAttribute('position', new THREE.BufferAttribute(new Float32Array(RING_SEGS * 3), 3));
+      ringPulseLine = new THREE.LineLoop(g2, new THREE.LineBasicMaterial({
+        color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false
+      }));
+      ringPulseLine.renderOrder = 4;
+      scene.add(ringPulseLine);
+    }
+    ringStatic.visible = true;
+    ringStatic.geometry.attributes.position.array.set(ringPts(lat, lon, km, RING_SEGS));
+    ringStatic.geometry.attributes.position.needsUpdate = true;
+    ringStatic.geometry.computeBoundingSphere();
+    ringPulseLine.visible = true;
+    ringPulseT = 0;
+  }
+
+  function hideRadiusRing() {
+    if (ringStatic) ringStatic.visible = false;
+    if (ringPulseLine) ringPulseLine.visible = false;
+    ringPulseT = -1;
+  }
+
+  function updateRadiusRing(dt) {
+    if (ringPulseT < 0 || !ringPulseLine) return;
+    ringPulseT += dt;
+    const T = 1.5;
+    if (ringPulseT > T * 2.4) { ringPulseT = -1; ringPulseLine.visible = false; return; }
+    const p = (ringPulseT % T) / T;
+    ringPulseLine.geometry.attributes.position.array.set(
+      ringPts(ringCtx.lat, ringCtx.lon, ringCtx.km * (0.1 + 0.9 * p), RING_SEGS));
+    ringPulseLine.geometry.attributes.position.needsUpdate = true;
+    ringPulseLine.material.opacity = 0.9 * (1 - p);
+    ringStatic.material.opacity = 0.5 + 0.16 * Math.sin(performance.now() / 620);
+  }
+
+  function nearbySummary(lat, lon, km) {
+    const out = { km, counts: { hyuyang: 0, myeongsan: 0, healing: 0, tree: 0, trail: 0 }, list: [] };
+    const me = { lat, lon };
+    const add = (kind, item, d, name, sub) => {
+      out.counts[kind]++;
+      out.list.push({ kind, item, d, name, sub });
+    };
+    for (const it of S.hyuyang) {
+      const d = haversine(me, { lat: it.lat, lon: it.lon });
+      if (d <= km) add('hyuyang', it, d, it.n, (it.sd || '') + (it.stay === 'Y' ? ' · 숙박' : ''));
+    }
+    for (const it of S.myeongsan) {
+      const d = haversine(me, { lat: it.lat, lon: it.lon });
+      if (d <= km) add('myeongsan', it, d, it.n, fmtNum(Math.round(it.h)) + 'm');
+    }
+    for (const it of S.healing) {
+      const d = haversine(me, { lat: it.lat, lon: it.lon });
+      if (d <= km) add('healing', it, d, it.n, it.kind || '치유의숲');
+    }
+    for (const t of S.trees) {
+      const d = haversine(me, { lat: t[8], lon: t[9] });
+      if (d <= km) add('tree', t, d, t[0] + ' 보호수', t[2] + '년 · ' + (t[6] || ''));
+    }
+    if (S.visible.trail) {
+      for (const c of S.trails) {
+        for (const tr of c.tracks) {
+          const pts = tr.pts;
+          const step = Math.max(1, Math.floor(pts.length / 120));
+          let best = 1e9;
+          for (let i = 0; i < pts.length; i += step) {
+            const d = haversine(me, { lat: pts[i][0], lon: pts[i][1] });
+            if (d < best) best = d;
+          }
+          if (best <= km) add('trail', { course: c.code, track: tr }, best, courseName(c.code), tr.id + ' · ' + fmtDist(tr.dist));
+        }
+      }
+    }
+    out.list.sort((a, b) => a.d - b.d);
+    return out;
+  }
+
+  function distLabel(d) { return d < 1 ? Math.round(d * 1000) + 'm' : d.toFixed(1) + 'km'; }
+
+  function nearbyBlock(kind, item) {
+    const ll = itemLatLon(kind, item);
+    const near = nearbySummary(ll.lat, ll.lon, S.radiusKm);
+    S.nearList = near.list;
+    const top = near.list.slice(0, 6);
+    const rows = top.map((r, i) => `<button type="button" data-near="${i}">
+        <b style="font-weight:600">${esc(r.name)}</b>
+        <span>${esc(KIND_LABEL[r.kind])} · ${distLabel(r.d)}</span></button>`).join('');
+    return `<div class="near">
+      <h4>반경 ${S.radiusKm}km 연계 산림자원</h4>
+      <div class="near-top">
+        <span style="font-size:11.5px;color:var(--muted);line-height:1.5">지도 위 링 안의 자원을 바로 모아 봅니다</span>
+        <div class="near-radius">${[10, 20, 50].map((k) => `<button type="button" data-radius="${k}" class="${k === S.radiusKm ? 'on' : ''}">${k}km</button>`).join('')}</div>
+      </div>
+      <div class="near-counts">
+        <div><b>${near.counts.hyuyang}</b><em>휴양림</em></div>
+        <div><b>${near.counts.myeongsan}</b><em>명산</em></div>
+        <div><b>${near.counts.healing}</b><em>치유의숲</em></div>
+        <div><b>${near.counts.tree}</b><em>보호수</em></div>
+      </div>
+      <div class="near-list">${rows || '<div style="font-size:11.5px;color:var(--muted)">반경 안에 등록된 자원이 없습니다. 반경을 넓혀 보세요.</div>'}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px">국가숲길 ${near.counts.trail}개 코스가 반경을 지납니다</div>
+    </div>`;
+  }
+
+  // ------------------------------------------------------------- 국가숲길 3D 코스 비행
+  const fly = {
+    active: false, paused: false, item: null, pts: [], cum: [], totalUnits: 0, totalMeters: 0,
+    s: 0, dur: 34, prof: [], pos: new THREE.Vector3(), look: new THREE.Vector3()
+  };
+
+  function startFly(item) {
+    const t = item.track, raw = t.pts;
+    if (!raw || raw.length < 4) return toast('이 코스는 비행할 좌표가 부족합니다.', 3200);
+    const step = Math.max(1, Math.floor(raw.length / 680));
+    const pts = [];
+    for (let i = 0; i < raw.length; i += step) {
+      const p = raw[i];
+      const e = heightAt(p[0], p[1]);
+      pts.push({ v: new THREE.Vector3(projX(p[1]), e * ELE_SCALE + 2.4, projZ(p[0])), lat: p[0], lon: p[1], e });
+    }
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + pts[i - 1].v.distanceTo(pts[i].v));
+    const total = cum[cum.length - 1];
+    if (!(total > 0)) return toast('이 코스는 비행할 거리가 없습니다.', 3200);
+
+    fly.item = item;
+    fly.pts = pts; fly.cum = cum;
+    fly.totalUnits = total;
+    fly.totalMeters = total * 1000 / P.k;
+    fly.dur = clamp(fly.totalMeters / 240, 26, 46);
+    fly.s = 0; fly.active = true; fly.paused = false;
+    fly.prof = (t.prof && t.prof.length > 1) ? t.prof : pts.map((p) => p.e);
+
+    const p0 = pts[0], p1 = pts[Math.min(8, pts.length - 1)];
+    const dir = p1.v.clone().sub(p0.v).normalize();
+    dir.y = clamp(dir.y, -0.22, 0.22);
+    dir.normalize();
+    fly.pos.copy(p0.v).addScaledVector(dir, -18).add(new THREE.Vector3(0, 34, 0));
+    fly.look.copy(p0.v).addScaledVector(dir, 46);
+    camera.position.copy(fly.pos);
+    camera.lookAt(fly.look);
+
+    $('#flyName').textContent = courseName(item.course) + ' · ' + t.id + ' (' + fmtDist(t.dist) + ')';
+    $('#flyHud').hidden = false;
+    for (const k of ['hyuyang', 'myeongsan', 'healing', 'tree']) if (markerGroups[k]) markerGroups[k].visible = false;
+    if (trailSel) trailSel.visible = false;
+    if (selRing) selRing.visible = false;
+    hideRadiusRing();
+    drawSpark(fly.prof);
+    updateFlyHud(sampleFly(0));
+    $('#detail').hidden = true;
+    $('#flyPause').textContent = '일시정지';
+    document.body.classList.add('flying');
+    toast('국가숲길 3D 코스 비행 시작 · ESC 로 종료', 3200);
+  }
+
+  function sampleFly(u) {
+    const target = clamp(u, 0, 1) * fly.totalUnits;
+    const cum = fly.cum;
+    let lo = 0, hi = cum.length - 1;
+    while (lo < hi - 1) {
+      const mid = (lo + hi) >> 1;
+      if (cum[mid] <= target) lo = mid; else hi = mid;
+    }
+    const seg = (cum[hi] - cum[lo]) || 1;
+    const f = clamp((target - cum[lo]) / seg, 0, 1);
+    const a = fly.pts[lo], b = fly.pts[hi];
+    return {
+      p: a.v.clone().lerp(b.v, f),
+      e: a.e + (b.e - a.e) * f,
+      lat: a.lat + (b.lat - a.lat) * f,
+      lon: a.lon + (b.lon - a.lon) * f
+    };
+  }
+
+  function updateFlyHud(smp) {
+    const done = fly.s * fly.totalMeters;
+    $('#flyDist').textContent = fmtDist(done);
+    $('#flyEle').textContent = fmtNum(Math.round(smp.e)) + 'm';
+    $('#flyLeft').textContent = fmtDist(Math.max(0, fly.totalMeters - done));
+    $('#flyPct').textContent = Math.round(fly.s * 100) + '%';
+    $('#flyCursor').style.left = (fly.s * 100).toFixed(2) + '%';
+  }
+
+  function drawSpark(prof) {
+    const svg = $('#flySpark');
+    if (!svg || !prof || prof.length < 2) return;
+    const W = 320, H = 64, pad = 5;
+    const min = Math.min.apply(null, prof), max = Math.max.apply(null, prof);
+    const span = Math.max(1, max - min), n = prof.length;
+    let d = '';
+    for (let i = 0; i < n; i++) {
+      const x = pad + (i / (n - 1)) * (W - pad * 2);
+      const y = H - pad - ((prof[i] - min) / span) * (H - pad * 2 - 6);
+      d += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+    }
+    svg.innerHTML = '<defs><linearGradient id="fg" x1="0" y1="0" x2="0" y2="1">'
+      + '<stop offset="0%" stop-color="#7ff0b8" stop-opacity=".45"/>'
+      + '<stop offset="100%" stop-color="#7ff0b8" stop-opacity="0"/></linearGradient></defs>'
+      + `<path d="${d}L${W - pad} ${H - pad}L${pad} ${H - pad}Z" fill="url(#fg)"/>`
+      + `<path d="${d}" fill="none" stroke="#a9ffd2" stroke-width="1.6" stroke-linejoin="round"/>`;
+  }
+
+  function updateFly(dt) {
+    if (!fly.active) return;
+    if (!fly.paused) fly.s = Math.min(1, fly.s + dt / fly.dur);
+    const smp = sampleFly(fly.s);
+    const ahead = sampleFly(Math.min(1, fly.s + 0.014));
+    const dir = ahead.p.clone().sub(smp.p);
+    if (dir.lengthSq() < 1e-8) dir.set(0, -0.2, -1);
+    dir.y = clamp(dir.y, -0.22, 0.22);
+    dir.normalize();
+    const desired = smp.p.clone().addScaledVector(dir, -18).add(new THREE.Vector3(0, 34, 0));
+    fly.pos.lerp(desired, 1 - Math.exp(-dt * 3.4));
+    // 카메라가 지형을 뚫지 않도록 최소 고도 유지
+    const clat = P.latC - fly.pos.z / (KM_LAT * P.k);
+    const clon = P.lonC + fly.pos.x / (KM_LON * P.k);
+    const groundY = heightAt(clat, clon) * ELE_SCALE;
+    if (fly.pos.y < groundY + 12) fly.pos.y = groundY + 12;
+    const wantLook = smp.p.clone().addScaledVector(dir, 46).add(new THREE.Vector3(0, 2, 0));
+    fly.look.lerp(wantLook, 1 - Math.exp(-dt * 4.8));
+    camera.position.copy(fly.pos);
+    camera.lookAt(fly.look);
+    updateFlyHud(smp);
+    if (fly.s >= 1) {
+      stopFly(true);
+      toast('코스 비행 완료 · ' + courseName(fly.item.course) + ' ' + fly.item.track.id, 4000);
+    }
+  }
+
+  function stopFly(quiet) {
+    if (!fly.active) return;
+    fly.active = false; fly.paused = false;
+    $('#flyHud').hidden = true;
+    document.body.classList.remove('flying');
+    applyFilters();
+    const p = camera.position, tgt = fly.look;
+    const dx = p.x - tgt.x, dy = p.y - tgt.y, dz = p.z - tgt.z;
+    const r = clamp(Math.sqrt(dx * dx + dy * dy + dz * dz), 55, 1700);
+    cam.tx = tgt.x; cam.ty = tgt.y; cam.tz = tgt.z;
+    cam.radius = r; cam.cRadius = r;
+    cam.phi = clamp(Math.acos(clamp(dy / r, -1, 1)), 0.18, 1.46);
+    cam.cPhi = cam.phi;
+    cam.theta = Math.atan2(dx, dz);
+    cam.cTheta = cam.theta;
+    cam.cx = cam.tx; cam.cy = cam.ty; cam.cz = cam.tz;
+    if (S.selected && !quiet) { /* 상세는 아래에서 다시 연다 */ }
+    if (trailSel) trailSel.visible = true;
+    if (S.selected) {
+      const ll = itemLatLon(S.selected.kind, S.selected.item);
+      buildRadiusRing(ll.lat, ll.lon, S.radiusKm);
+      renderDetail(S.selected.kind, S.selected.item);
+    }
+    if (!quiet) toast('3D 코스 비행을 종료했습니다', 2800);
+  }
+
+  function closeDetail() {
+    $('#detail').hidden = true;
+    S.selected = null;
+    S.hoverItem = null;
+    if (selRing) selRing.visible = false;
+    hideRadiusRing();
+    if (fly.active) stopFly(true);
+    const pin = $('#pin'); if (pin) { pin.classList.remove('show'); pin.hidden = true; pin._key = null; }
+  }
 
   // ------------------------------------------------------------- filters
   const SIDO_BOXES = [
@@ -909,12 +1381,7 @@
     ul.querySelectorAll('li[data-i]').forEach((li) => {
       li.onclick = () => {
         const r = shown[+li.dataset.i];
-        if (r.kind === 'tree') {
-          focusOn(r.item[8], r.item[9], 85);
-          toast(r.item[0] + ' 보호수 · 수령 ' + r.item[2] + '년 · ' + r.item[7], 4200);
-        } else {
-          select(r.kind, r.item);
-        }
+        select(r.kind, r.item);
         if (isMobile()) $('#panel').classList.remove('open');
       };
     });
@@ -968,6 +1435,15 @@
     $('#rowCountTop').textContent = fmtNum(total);
 
     $('#detailClose').onclick = closeDetail;
+
+    document.querySelectorAll('.moods button').forEach((b) => {
+      b.onclick = () => applyMood(b.dataset.mood);
+    });
+    $('#flyStop').onclick = () => stopFly(false);
+    $('#flyPause').onclick = () => {
+      fly.paused = !fly.paused;
+      $('#flyPause').textContent = fly.paused ? '계속' : '일시정지';
+    };
 
     document.querySelectorAll('.presets button').forEach((b) => {
       b.onclick = () => {
@@ -1132,7 +1608,8 @@
     const t = (now - t0) / 1000;
     const dt = Math.min(0.12, (now - (animate._p || now)) / 1000);
     animate._p = now;
-    applyCamera(dt);
+    if (fly.active) updateFly(dt);
+    else applyCamera(dt);
     updateMarkerScale();
     guardQuality(dt);
     if (particles) particles.rotation.y = t * 0.01;
@@ -1142,10 +1619,12 @@
       selRing.scale.setScalar(1 + 0.35 * Math.sin(ph * 3));
       selRing.material.opacity = 0.55 + 0.3 * Math.sin(ph * 3);
     }
-    if (pointerNDC.x > -5) doHover();
+    updateRadiusRing(dt);
+    if (!fly.active && pointerNDC.x > -5) doHover();
     renderer.render(scene, camera);
     updateLabels();
     updateScaleBar();
+    pinRefresh();
   }
 
   // ------------------------------------------------------------- boot
@@ -1167,8 +1646,12 @@
       cam.radius = fr; cam.cRadius = fr * 1.35;
       if (isMobile()) { cam.phi = 0.78; cam.cPhi = 0.95; cam.tz = 0; cam.cz = 40; }
       applyFilters();
+      applyMood(S.mood);
       animate();
-      window.__forest3d = { S, cam, scene, camera, renderer, instanced, select, applyFilters };
+      window.__forest3d = {
+        S, cam, scene, camera, renderer, instanced, select, applyFilters, applyMood, startFly, stopFly,
+        nearbySummary, fly, pickAt, itemLatLon, buildRadiusRing, ensureContours
+      };
     } catch (e) {
       console.error(e);
       toast('지도를 불러오지 못했습니다: ' + e.message, 10000);

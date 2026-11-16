@@ -27,6 +27,11 @@
       </span>
     </div>
     <div class="top-actions">
+      <div class="moods" role="group" aria-label="3D 분위기·조명">
+        <button type="button" data-mood="day" class="on" title="맑은 낮"><i>☀</i><span>낮</span></button>
+        <button type="button" data-mood="sunset" title="황금 노을"><i>◐</i><span>노을</span></button>
+        <button type="button" data-mood="mist" title="산림 안개 · 등고선 강조"><i>≋</i><span>안개</span></button>
+      </div>
       <button id="btnCase" class="chip chip-case" type="button">활용 사례 소개</button>
       <button id="btnData" class="chip chip-data" type="button">
         <span class="dot"></span><span class="chip-long">산림공공데이터 </span><b id="dataCountTop">5</b>종 · <b id="rowCountTop">10,300</b>건
@@ -99,11 +104,33 @@
     <button type="button" data-preset="me" class="me">내 주변</button>
   </div>
 
-  <div id="hint" class="hint">드래그로 회전 · 휠/핀치로 확대 · 표식을 눌러 실제 데이터 확인</div>
+  <div id="hint" class="hint">드래그로 회전 · 휠/핀치로 확대 · 표식을 누르면 이름과 상세가 열립니다</div>
   <div id="labels" class="labels" aria-hidden="true"></div>
   <div id="scalebar" class="scalebar"><i></i><b>100km</b></div>
   <div class="vignette" aria-hidden="true"></div>
+  <div id="pin" class="pin" hidden aria-hidden="true"></div>
   <div id="tooltip" class="tooltip" hidden></div>
+
+  <div id="flyHud" class="fly-hud" hidden>
+    <div class="fly-head">
+      <span class="fly-kicker">3D 코스 비행 · GPX</span>
+      <b id="flyName">—</b>
+      <span class="fly-btns">
+        <button id="flyPause" type="button">일시정지</button>
+        <button id="flyStop" type="button" class="fly-stop">종료</button>
+      </span>
+    </div>
+    <div class="fly-stats">
+      <div><em>진행 거리</em><b id="flyDist">-</b></div>
+      <div><em>현재 고도</em><b id="flyEle">-</b></div>
+      <div><em>남은 거리</em><b id="flyLeft">-</b></div>
+      <div><em>진행률</em><b id="flyPct">0%</b></div>
+    </div>
+    <div class="fly-graph">
+      <svg id="flySpark" viewBox="0 0 320 64" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <span class="fly-cursor" id="flyCursor"></span>
+    </div>
+  </div>
   <div id="toast" class="toast" hidden></div>
 
   <div id="dataModal" class="modal" hidden>
@@ -140,6 +167,9 @@
         <li><b>거리·고도를 실제 지형으로.</b> 실제 표고(DEM) 위에 표식을 올려 해발·산세를 눈으로 확인하고, 숲길은 구간 거리와 고도 그래프까지 자동 계산합니다.</li>
         <li><b>아이와 함께 가는 가족에게.</b> 숙박 가능한 휴양림과 난이도 낮은 명산을 한 번에 걸러 가족 나들이 후보를 좁힐 수 있습니다.</li>
         <li><b>운영 부담 0원.</b> 정적 파일만으로 동작해 서버·API 키·유지비가 없고, 스마트폰 브라우저에서도 같은 화면을 씁니다.</li>
+        <li><b>표식을 누르면 이름 배지 + 상세 카드.</b> 지도 위 어느 표식이든(보호수 포함 5개 레이어) 이름·원본 값이 바로 뜨고, 그 지점 반경 20km의 휴양림·명산·치유의숲·보호수가 함께 정리됩니다.</li>
+        <li><b>국가숲길 3D 코스 비행.</b> 실제 GPX 궤적을 따라 카메라가 능선을 타고 날며 현재 고도·진행 거리·고도 프로필 커서가 실시간으로 움직입니다.</li>
+        <li><b>분위기·등고선 모드.</b> 맑은 낮 · 황금 노을 · 산림 안개(100m 등고선 강조)로 같은 데이터를 다르게 읽습니다.</li>
       </ul>
 
       <h4 class="case-h">데이터 이용자 관점의 개선 아이디어</h4>
@@ -160,9 +190,11 @@
       <p class="modal-sub">산림청 산림공공데이터로 만든 전국 산림휴양 탐색 지도입니다.</p>
       <ol class="help-list">
         <li><b>지도를 돌려 보세요.</b> 드래그로 회전, 휠·두 손가락으로 확대합니다.</li>
-        <li><b>표식을 누르면</b> 실제 공개데이터 값(시설·요금·난이도·산행코스·수령)이 열립니다.</li>
+        <li><b>표식을 누르면</b> 표식 위에 이름 배지가 뜨고, 실제 공개데이터 값(시설·요금·난이도·산행코스·수령)이 상세 카드로 열립니다.</li>
         <li><b>왼쪽에서 레이어와 시도를 좁히면</b> 지도와 목록이 함께 걸러집니다.</li>
-        <li><b>국가숲길</b>은 실제 GPX 트랙을 지형에 얹었습니다. 눌러서 코스별 거리·누적 상승·고도 그래프를 보세요.</li>
+        <li><b>국가숲길</b>은 실제 GPX 트랙을 지형에 얹었습니다. 상세의 <b>🛩 3D 코스 비행</b>을 누르면 능선을 따라 카메라가 날며 고도·진행 거리가 실시간으로 바뀝니다.</li>
+        <li><b>오른쪽 위 분위기 버튼</b>으로 맑은 낮 · 황금 노을 · 산림 안개(100m 등고선 강조)를 바꿔 볼 수 있습니다.</li>
+        <li><b>아무 표식이나 누르면</b> 반경 20km 링이 지형 위에 퍼지고, 그 안의 휴양림·명산·치유의숲·보호수가 상세 카드에 함께 정리됩니다(10·50km로 변경 가능).</li>
         <li><b>내 주변</b>은 브라우저 위치 권한을 허용할 때 50km 안의 숲을 찾아 줍니다.</li>
       </ol>
       <p class="modal-foot">데이터 기준일은 항목별로 표시되며, 원본은 공공데이터포털에서 갱신됩니다.</p>
