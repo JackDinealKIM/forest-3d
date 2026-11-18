@@ -666,6 +666,7 @@ sun.shadow.camera.far = 520; sun.shadow.bias = -0.0012;
       view.dist = res.place.scene === 'urban' ? 215 : 240;
       view.tx = 0; view.ty = 10; view.tz = 80;
     }
+    if (window.innerHeight > window.innerWidth) view.dist *= 1.55; // 세로 화면은 더 넓게
     applyCamera();
   }
 
