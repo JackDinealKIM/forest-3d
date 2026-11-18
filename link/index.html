@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>숲잇다 — AI 산림복지 처방 시뮬레이터 (제안 프로토타입)</title>
+<meta name="description" content="2026년 산림복지 국민제안 공모전 제안 '숲잇다' 설명용 3D 시뮬레이터. 처방→실행→효과 환류를 보여줍니다.">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div class="app">
+  <header class="hdr">
+    <div class="brand">
+      <span class="mark">숲</span>
+      <span class="name">숲잇다<small>Forest Link</small></span>
+    </div>
+    <div class="hdr-mid">AI 산림복지 처방 시뮬레이터 <span class="dot">·</span> 제안 프로토타입</div>
+    <div class="hdr-right">
+      <button id="btnTour" class="btn ghost" type="button">코스 따라가기</button>
+      <button id="btnInfo" class="btn ghost icon" type="button" aria-label="설명">?</button>
+    </div>
+  </header>
+
+  <aside class="panel" id="panel">
+    <div class="panel-head">
+      <span class="step">1</span>
+      <h2>처방 입력</h2>
+      <span class="est">약 3분</span>
+    </div>
+
+    <div class="field">
+      <label>지금 가장 필요한 것</label>
+      <div class="seg" data-key="goal">
+        <button class="on" data-v="stress">스트레스 완화</button>
+        <button data-v="sleep">수면 개선</button>
+        <button data-v="active">활동량 증대</button>
+        <button data-v="social">사회 연결</button>
+      </div>
+    </div>
+
+    <div class="field row2">
+      <div>
+        <label>수면</label>
+        <div class="seg vertical" data-key="sleepQ">
+          <button data-v="3">잘 잔다</button>
+          <button class="on" data-v="2">보통</button>
+          <button data-v="1">뒤척인다</button>
+        </div>
+      </div>
+      <div>
+        <label>긴장·불안</label>
+        <div class="seg vertical" data-key="stressQ">
+          <button data-v="1">낮다</button>
+          <button class="on" data-v="2">보통</button>
+          <button data-v="3">높다</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="field row2">
+      <div>
+        <label>평소 활동량</label>
+        <div class="seg vertical" data-key="actQ">
+          <button data-v="1">거의 없음</button>
+          <button class="on" data-v="2">주 1~2회</button>
+          <button data-v="3">주 3회 이상</button>
+        </div>
+      </div>
+      <div>
+        <label>이동</label>
+        <div class="seg vertical" data-key="mobility">
+          <button class="on" data-v="free">자유롭게</button>
+          <button data-v="cane">지팡이·보호자</button>
+          <button data-v="wheel">휠체어</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>함께 가는 사람</label>
+      <div class="seg" data-key="company">
+        <button class="on" data-v="alone">혼자</button>
+        <button data-v="kid">아이</button>
+        <button data-v="elder">어르신</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>쓸 수 있는 시간</label>
+      <div class="seg" data-key="time">
+        <button data-v="60">60분</button>
+        <button class="on" data-v="90">90분</button>
+        <button data-v="120">120분</button>
+      </div>
+    </div>
+
+    <div class="panel-foot">
+      <div class="who">김*동 · 40대 · 개인 <span>(예시 입력)</span></div>
+      <button id="btnPrescribe" class="btn primary wide" type="button">처방 받기</button>
+    </div>
+  </aside>
+
+  <section class="result" id="result">
+    <div class="panel-head">
+      <span class="step">2</span>
+      <h2>처방 결과</h2>
+      <span class="est" id="resMeta">주 1회 · 8주</span>
+    </div>
+
+    <div class="code-card">
+      <div class="code-label">숲잇기 코드</div>
+      <div class="code" id="codeText">S·2·8·H</div>
+      <div class="code-desc" id="codeDesc">목표 S · 강도 2 · 8주 · 치유의숲</div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric"><b id="mIntensity">강도 2</b><span>프로그램 강도</span></div>
+      <div class="metric"><b id="mMove">42분</b><span>이동 예상</span></div>
+      <div class="metric"><b id="mAccess">보통</b><span>접근성</span></div>
+    </div>
+
+    <div class="block">
+      <h3>처방 프로그램 <small id="progMeta">90분 · 4개</small></h3>
+      <ol class="timeline" id="timeline"></ol>
+    </div>
+
+    <div class="block">
+      <h3>8주 효과 예측 <small>예시 곡선</small></h3>
+      <canvas id="chart" width="640" height="220"></canvas>
+      <div class="chart-legend"><i class="ln"></i>긴장 지수(낮을수록 좋음) <i class="dt"></i>회기</div>
+    </div>
+
+    <div class="block report" id="report">
+      <h3>회기 후 기록 <small>3문항 + 걸음·심박</small></h3>
+      <div class="rk">
+        <div><span>긴장</span><b>6 → 3</b></div>
+        <div><span>기분</span><b>4 → 7</b></div>
+        <div><span>걸음</span><b>2,140</b></div>
+        <div><span>평균 심박</span><b>92</b></div>
+      </div>
+      <p class="rk-note">→ 처방자에게 <b>회신 리포트</b>가 전송되고, 다음 회기 강도가 자동 조정됩니다.</p>
+    </div>
+
+    <div class="ai-note">
+      AI는 <b>후보를 제안</b>하고, 최종 처방은 산림치유지도사·보건인력이 확인합니다.
+    </div>
+  </section>
+
+  <div class="stage-switch" id="stageSwitch">
+    <button class="on" data-place="healing">치유의숲</button>
+    <button data-place="urban">도시숲</button>
+    <button data-place="living">도서관 마당</button>
+  </div>
+
+  <div class="tour-hud" id="tourHud">
+    <div class="th-top"><b id="thName">숲 명상 데크</b><span id="thTime">00:00 / 18:00</span></div>
+    <div class="th-bar"><i id="thFill"></i></div>
+    <div class="th-sub" id="thSub">코스를 따라 이동 중 · ESC로 종료</div>
+  </div>
+
+  <footer class="foot">
+    <span>숲잇다 · 2026년 산림복지 국민제안 공모전 제안 설명용 시뮬레이터</span>
+    <span>지형·코스·효과 수치는 이해를 돕기 위한 예시입니다.</span>
+  </footer>
+</div>
+
+<div class="sheet" id="info">
+  <div class="sheet-in">
+    <h3>이 화면에 대하여</h3>
+    <p><b>숲잇다</b>는 AI가 개인의 상태를 읽어 <b>산림복지 처방</b>을 만들고, 가까운 치유의숲·도시숲·생활공간(도서관·경로당·복지관)의 프로그램까지 연결하며, 회기마다 효과를 기록해 다시 처방으로 돌려주는 서비스입니다.</p>
+    <ul>
+      <li><b>1 처방</b> — 10문항 문진 + 선택적 활동 데이터로 목표·강도·회기·장소를 정합니다.</li>
+      <li><b>2 실행</b> — 처방 코드로 예약·이동·동행·AI 코스 안내까지 이어집니다.</li>
+      <li><b>3 환류</b> — 3문항 + 걸음·심박으로 효과를 남겨 처방자에게 회신합니다.</li>
+    </ul>
+    <p class="sheet-fine">본 페이지는 제안 내용을 설명하기 위한 프로토타입이며, 실제 기관 시스템·데이터와 연결되어 있지 않습니다. 표시되는 시설·수치는 예시입니다.</p>
+    <button class="btn primary" id="infoClose" type="button">닫기</button>
+  </div>
+</div>
+
+<script src="three.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
