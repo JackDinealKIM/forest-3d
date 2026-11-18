@@ -472,6 +472,7 @@ sun.shadow.camera.far = 520; sun.shadow.bias = -0.0012;
      3. 카메라 · 조작
      ========================================================= */
   const view = { theta: -0.62, phi: 0.86, dist: 250, tx: 0, ty: 12, tz: 80 };
+  let lookDrop = 0;
   let dragging = false, lx = 0, ly = 0, pinch = 0;
 
   function applyCamera() {
@@ -481,7 +482,7 @@ sun.shadow.camera.far = 520; sun.shadow.bias = -0.0012;
       view.ty + view.dist * cp,
       view.tz + view.dist * sp * Math.cos(view.theta)
     );
-    camera.lookAt(view.tx, view.ty, view.tz);
+    camera.lookAt(view.tx, view.ty - lookDrop, view.tz);
   }
   applyCamera();
 
@@ -666,7 +667,8 @@ sun.shadow.camera.far = 520; sun.shadow.bias = -0.0012;
       view.dist = res.place.scene === 'urban' ? 215 : 240;
       view.tx = 0; view.ty = 10; view.tz = 80;
     }
-    if (window.innerHeight > window.innerWidth) view.dist *= 1.55; // 세로 화면은 더 넓게
+    const portrait = window.innerHeight > window.innerWidth;
+    if (portrait) { view.dist *= 1.5; lookDrop = view.dist * 0.30; } else { lookDrop = 0; }
     applyCamera();
   }
 
