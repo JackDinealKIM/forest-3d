@@ -120,7 +120,6 @@
   const canvas = $('#scene');
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.22;
@@ -131,7 +130,16 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   scene.fog = new THREE.FogExp2(0x24463a, 0.0031);
   scene.background = skyTexture();
 
-  const camera = new THREE.PerspectiveCamera(46, window.innerWidth / window.innerHeight, 0.5, 1600);
+  const camera = new THREE.PerspectiveCamera(46, 1, 0.5, 1600);
+
+  function sizeCanvas() {
+    const w = canvas.clientWidth || window.innerWidth;
+    const h = canvas.clientHeight || window.innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  sizeCanvas();
 
   const hemi = new THREE.HemisphereLight(0xb6e2cc, 0x101f18, 1.35);
   scene.add(hemi);
@@ -667,7 +675,7 @@ sun.shadow.camera.far = 520; sun.shadow.bias = -0.0012;
       view.dist = res.place.scene === 'urban' ? 215 : 240;
       view.tx = 0; view.ty = 10; view.tz = 80;
     }
-    const portrait = window.innerHeight > window.innerWidth;
+    const portrait = canvas.clientHeight / canvas.clientWidth > 1.2;
     if (portrait) { view.dist *= 1.5; lookDrop = view.dist * 0.30; } else { lookDrop = 0; }
     applyCamera();
   }
@@ -751,9 +759,7 @@ sun.shadow.camera.far = 520; sun.shadow.bias = -0.0012;
   }
 
   window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    sizeCanvas();
     if (current) drawChart(current);
   });
 
